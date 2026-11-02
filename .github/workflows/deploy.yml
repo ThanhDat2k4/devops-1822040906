@@ -1,0 +1,79 @@
+name: Check and Deploy Website
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Check required files
+        shell: bash
+        run: |
+          for file in index.html style.css script.js; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing required file: $file"
+              exit 1
+            fi
+          done
+
+          echo "PASS: All required files exist."
+
+      - name: Check title tag
+        shell: bash
+        run: |
+          if ! grep -qi '<title>' index.html; then
+            echo "::error::index.html is missing the title tag."
+            exit 1
+          fi
+
+          echo "PASS: Title tag found."
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare website files
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html style.css script.js _site/
+
+      - name: Upload website artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./_site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
